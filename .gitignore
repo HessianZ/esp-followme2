@@ -1,1 +1,5 @@
-cmake-build-*
+/cmake-build-*/
+/build/
+/sdkconfig
+/sdkconfig.old
+/managed_components/
