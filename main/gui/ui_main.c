@@ -337,16 +337,16 @@ static void ui_main_menu(int32_t index_id)
     ui_status_bar_set_visible(true);
 
     lv_obj_t *obj = lv_obj_create(g_page_menu);
-    lv_obj_set_size(obj, 290, 174);
+    lv_obj_set_size(obj, 220, 100);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(obj, 15, LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(obj, 0, LV_STATE_DEFAULT);
     lv_obj_set_style_shadow_width(obj, 20, LV_PART_MAIN);
     lv_obj_set_style_shadow_opa(obj, LV_OPA_30, LV_PART_MAIN);
-    lv_obj_align(obj, LV_ALIGN_TOP_MID, 0, -10);
+    lv_obj_align(obj, LV_ALIGN_TOP_MID, 0, -12);
 
     g_img_btn = lv_btn_create(obj);
-    lv_obj_set_size(g_img_btn, 80, 80);
+    lv_obj_set_size(g_img_btn, 50, 50);
     lv_obj_add_style(g_img_btn, &ui_button_styles()->style_pr, LV_STATE_PRESSED);
     lv_obj_add_style(g_img_btn, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUS_KEY);
     lv_obj_add_style(g_img_btn, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUSED);
@@ -356,7 +356,7 @@ static void ui_main_menu(int32_t index_id)
     lv_obj_set_style_shadow_ofs_x(g_img_btn, 0, LV_PART_MAIN);
     lv_obj_set_style_shadow_ofs_y(g_img_btn, 0, LV_PART_MAIN);
     lv_obj_set_style_shadow_opa(g_img_btn, LV_OPA_50, LV_PART_MAIN);
-    lv_obj_set_style_radius(g_img_btn, 40, LV_PART_MAIN);
+    lv_obj_set_style_radius(g_img_btn, 25, LV_PART_MAIN);
     lv_obj_align(g_img_btn, LV_ALIGN_CENTER, 0, -20);
     lv_obj_add_event_cb(g_img_btn, menu_enter_cb, LV_EVENT_ALL, g_img_btn);
 
@@ -393,7 +393,7 @@ static void ui_main_menu(int32_t index_id)
     lv_obj_add_style(btn_prev, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUS_KEY);
     lv_obj_add_style(btn_prev, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUSED);
 
-    lv_obj_set_size(btn_prev, 40, 40);
+    lv_obj_set_size(btn_prev, 20, 20);
     lv_obj_set_style_bg_color(btn_prev, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_shadow_color(btn_prev, lv_color_make(0, 0, 0), LV_PART_MAIN);
     lv_obj_set_style_shadow_width(btn_prev, 15, LV_PART_MAIN);
@@ -423,7 +423,7 @@ static void ui_main_menu(int32_t index_id)
     lv_obj_add_style(btn_next, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUS_KEY);
     lv_obj_add_style(btn_next, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUSED);
 
-    lv_obj_set_size(btn_next, 40, 40);
+    lv_obj_set_size(btn_next, 20, 20);
     lv_obj_set_style_bg_color(btn_next, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_shadow_color(btn_next, lv_color_make(0, 0, 0), LV_PART_MAIN);
     lv_obj_set_style_shadow_width(btn_next, 15, LV_PART_MAIN);
@@ -495,8 +495,7 @@ esp_err_t ui_main_start(void)
 
     lv_indev_type_t indev_type = lv_indev_get_type(indev);
 
-    if ((indev_type == LV_INDEV_TYPE_KEYPAD) || \
-            indev_type == LV_INDEV_TYPE_ENCODER) {
+    if ((indev_type == LV_INDEV_TYPE_KEYPAD) || indev_type == LV_INDEV_TYPE_ENCODER) {
         ESP_LOGI(TAG, "Input device type is keypad");
         g_btn_op_group = lv_group_create();
         lv_indev_set_group(indev, g_btn_op_group);
@@ -508,7 +507,7 @@ esp_err_t ui_main_start(void)
 
     // Create status bar
     g_status_bar = lv_obj_create(lv_scr_act());
-    lv_obj_set_size(g_status_bar, lv_obj_get_width(lv_obj_get_parent(g_status_bar)), 36);
+    lv_obj_set_size(g_status_bar, lv_obj_get_width(lv_obj_get_parent(g_status_bar)), 30);
     lv_obj_clear_flag(g_status_bar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(g_status_bar, 0, LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(g_status_bar, lv_obj_get_style_bg_color(lv_scr_act(), LV_STATE_DEFAULT), LV_PART_MAIN);
