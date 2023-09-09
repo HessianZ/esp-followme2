@@ -20,15 +20,18 @@
 #include "esp_lvgl_port.h"
 #include "bsp/tft-feather.h"
 
-#define GPIO_LCD_BACKLIGHT (45)
 #define LCD_CMD_BITS           8
 #define LCD_PARAM_BITS         8
 #define LCD_LEDC_CH            1
 
+
 static const char *TAG = "ui_main";
 
 LV_FONT_DECLARE(font_icon_16);
-LV_FONT_DECLARE(font_HarmonyOS_Sans_Light_16);
+//LV_FONT_DECLARE(font_HarmonyOS_Sans_Light_16);
+LV_FONT_DECLARE(font_cn_gb1_16);
+
+static const lv_font_t *main_font = &font_cn_gb1_16;
 
 static int g_item_index = 0;
 static lv_group_t *g_btn_op_group = NULL;
@@ -256,7 +259,6 @@ void menu_new_item_select(lv_obj_t *obj)
     lv_label_set_text_static(g_lab_item, item[g_item_index].name);
 }
 
-#if CONFIG_BSP_BOARD_ESP32_S3_BOX_Lite
 static void menu_prev_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -283,39 +285,6 @@ static void menu_next_cb(lv_event_t *e)
         lv_event_send(g_img_btn, LV_EVENT_CLICKED, g_img_btn);
     }
 }
-#else
-static void menu_prev_cb(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (LV_EVENT_RELEASED == code) {
-        lv_led_off(g_led_item[g_item_index]);
-        if (0 == g_item_index) {
-            g_item_index = g_item_size;
-        }
-        g_item_index--;
-        lv_led_on(g_led_item[g_item_index]);
-        lv_img_set_src(g_img_item, item[g_item_index].img_src);
-        lv_label_set_text_static(g_lab_item, item[g_item_index].name);
-    }
-}
-
-static void menu_next_cb(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (LV_EVENT_RELEASED == code) {
-        lv_led_off(g_led_item[g_item_index]);
-        g_item_index++;
-        if (g_item_index >= g_item_size) {
-            g_item_index = 0;
-        }
-        lv_led_on(g_led_item[g_item_index]);
-        lv_img_set_src(g_img_item, item[g_item_index].img_src);
-        lv_label_set_text_static(g_lab_item, item[g_item_index].name);
-    }
-}
-#endif
 
 static void menu_enter_cb(lv_event_t *e)
 {
@@ -397,7 +366,7 @@ static void ui_main_menu(int32_t index_id)
 
     g_lab_item = lv_label_create(obj);
     lv_label_set_text_static(g_lab_item, item[index_id].name);
-    lv_obj_set_style_text_font(g_lab_item, &font_HarmonyOS_Sans_Light_16, LV_PART_MAIN);
+    lv_obj_set_style_text_font(g_lab_item, main_font, LV_PART_MAIN);
     lv_obj_align(g_lab_item, LV_ALIGN_CENTER, 0, 60);
 
     int g_led_count = sizeof(g_led_item) / sizeof(g_led_item[0]);
@@ -438,19 +407,16 @@ static void ui_main_menu(int32_t index_id)
     lv_obj_set_style_text_color(label, lv_color_make(5, 5, 5), LV_PART_MAIN);
     lv_obj_center(label);
     lv_obj_add_event_cb(btn_prev, menu_prev_cb, LV_EVENT_ALL, btn_prev);
-#if CONFIG_BSP_BOARD_ESP32_S3_BOX_Lite
+
     if (ui_get_btn_op_group()) {
         lv_group_add_obj(ui_get_btn_op_group(), btn_prev);
     }
     g_group_list[0] = btn_prev;
-#endif
 
-#if CONFIG_BSP_BOARD_ESP32_S3_BOX_Lite
     if (ui_get_btn_op_group()) {
         lv_group_add_obj(ui_get_btn_op_group(), g_img_btn);
     }
     g_group_list[1] = g_img_btn;
-#endif
 
     lv_obj_t *btn_next = lv_btn_create(obj);
     lv_obj_add_style(btn_next, &ui_button_styles()->style_pr, LV_STATE_PRESSED);
@@ -471,12 +437,11 @@ static void ui_main_menu(int32_t index_id)
     lv_obj_set_style_text_color(label, lv_color_make(5, 5, 5), LV_PART_MAIN);
     lv_obj_center(label);
     lv_obj_add_event_cb(btn_next, menu_next_cb, LV_EVENT_ALL, btn_next);
-#if CONFIG_BSP_BOARD_ESP32_S3_BOX_Lite
+
     if (ui_get_btn_op_group()) {
         lv_group_add_obj(ui_get_btn_op_group(), btn_next);
     }
     g_group_list[2] = btn_next;
-#endif
 }
 
 static void ui_after_boot(void)
@@ -558,7 +523,7 @@ esp_err_t ui_main_start(void)
     clock_run_cb(timer);
 
     lv_obj_t *lab_weather = lv_label_create(g_status_bar);
-    lv_obj_set_style_text_font(lab_weather, &font_HarmonyOS_Sans_Light_16, LV_PART_MAIN);
+    lv_obj_set_style_text_font(lab_weather, main_font, LV_PART_MAIN);
     lv_label_set_text_static(lab_weather, "梅州 多云 25℃");
 //    lv_obj_align(lab_time, LV_ALIGN_LEFT_MID, 10, 0);
     lv_obj_align_to(lab_weather, lab_time, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
@@ -569,6 +534,8 @@ esp_err_t ui_main_start(void)
     lv_obj_align_to(g_lab_wifi, lab_weather, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
 
     ui_status_bar_set_visible(0);
+
+    ui_after_boot();
 
     ui_release();
     return ESP_OK;

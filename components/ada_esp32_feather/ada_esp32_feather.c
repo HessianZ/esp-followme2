@@ -175,6 +175,19 @@ esp_err_t bsp_display_new(const bsp_display_config_t *config, esp_lcd_panel_hand
     esp_lcd_panel_mirror(*ret_panel, false, true);
     esp_lcd_panel_swap_xy(*ret_panel, true);
     esp_lcd_panel_invert_color(*ret_panel, true);
+
+    // 参考adafruit官方库中的代码，在240x135屏上需要设置偏移
+    // 注意这里x，y对调了
+    // see: https://github.com/adafruit/Adafruit-ST7735-Library/blob/master/Adafruit_ST7789.cpp
+    if (BSP_LCD_H_RES == 240 && BSP_LCD_V_RES == 135) {
+        // 1.14" display (centered, with odd size)
+        uint16_t _rowstart = (int)((320 - BSP_LCD_H_RES) / 2);
+        // This is the only device currently supported device that has different
+        // values for _colstart & _colstart2. You must ensure that the extra
+        // pixel lands in _colstart and not in _colstart2
+        uint16_t _colstart = (int)((240 - BSP_LCD_V_RES + 1) / 2);
+        esp_lcd_panel_set_gap(*ret_panel, _rowstart, _colstart);
+    }
     return ret;
 
 err:
@@ -190,6 +203,24 @@ err:
 
 static lv_disp_t *bsp_display_lcd_init(void)
 {
+    gpio_config_t io_conf = {
+            .mode = GPIO_MODE_OUTPUT,
+            .pin_bit_mask = (1ULL<<GPIO_NUM_21),
+            .intr_type = GPIO_INTR_DISABLE,
+            .pull_down_en = 0,
+            .pull_up_en = 0,
+    };
+    esp_err_t err = gpio_config(&io_conf);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "configure GPIO for TFT_I2C_POWER failed");
+    }
+
+    err = gpio_set_level(GPIO_NUM_21, 1);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "gpio_set_level GPIO for TFT_I2C_POWER failed");
+    }
+    ESP_LOGI(TAG, "TFT_I2C_POWER ON");
+
     esp_lcd_panel_io_handle_t io_handle = NULL;
     esp_lcd_panel_handle_t panel_handle = NULL;
     const bsp_display_config_t bsp_disp_cfg = {
@@ -250,6 +281,8 @@ lv_disp_t *bsp_display_start(void)
     BSP_NULL_CHECK(disp = bsp_display_lcd_init(), NULL);
 
     BSP_NULL_CHECK(disp_indev = bsp_display_indev_init(disp), NULL);
+
+    bsp_display_rotate(disp, LV_DISP_ROT_180);
 
     return disp;
 }

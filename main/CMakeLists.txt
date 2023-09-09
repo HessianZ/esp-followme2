@@ -4,6 +4,7 @@ idf_component_register(
         "app"
         "gui"
         "gui/font"
+        "gui/image"
 
         INCLUDE_DIRS
         "."

@@ -54,33 +54,14 @@ void wifi_task(void *args)
     vTaskDelete(NULL);
 }
 
-void main_init(void)
-{
-    gpio_config_t io_conf = {
-            .mode = GPIO_MODE_OUTPUT,
-            .pin_bit_mask = (1ULL<<GPIO_NUM_21),
-            .intr_type = GPIO_INTR_DISABLE,
-            .pull_down_en = 0,
-            .pull_up_en = 0,
-    };
-    esp_err_t err = gpio_config(&io_conf);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "configure GPIO for TFT_I2C_POWER failed");
-    }
-
-    err = gpio_set_level(GPIO_NUM_21, 1);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_set_level GPIO for TFT_I2C_POWER failed");
-    }
-}
 
 void app_main(void)
 {
-    main_init();
-
     esp_log_level_set("TFT-FEATHER", ESP_LOG_VERBOSE);
     esp_log_level_set("ledc", ESP_LOG_VERBOSE);
+    esp_log_level_set("LVGL", ESP_LOG_VERBOSE);
     esp_log_level_set("lcd_panel.st7789", ESP_LOG_VERBOSE);
+    esp_log_level_set("lcd_panel.io.spi", ESP_LOG_VERBOSE);
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {

@@ -130,8 +130,8 @@ esp_err_t bsp_spiffs_unmount(void);
  *
  * Display's backlight must be enabled explicitly by calling bsp_display_backlight_on()
  **************************************************************************************************/
-#define BSP_LCD_H_RES              (135)
-#define BSP_LCD_V_RES              (240)
+#define BSP_LCD_H_RES              (240)
+#define BSP_LCD_V_RES              (135)
 #define BSP_LCD_PIXEL_CLOCK_HZ     (40 * 1000 * 1000)
 #define BSP_LCD_SPI_NUM            (SPI3_HOST)
 
