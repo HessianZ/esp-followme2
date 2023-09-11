@@ -11,7 +11,6 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_check.h"
-#include "lvgl.h"
 #include "lv_symbol_extra_def.h"
 #include "app_wifi.h"
 #include "ui_main.h"
@@ -19,24 +18,23 @@
 #include "ui_net_config.h"
 #include "esp_lvgl_port.h"
 #include "bsp/tft-feather.h"
+#include "page/page_home.h"
 
 #define LCD_CMD_BITS           8
 #define LCD_PARAM_BITS         8
 #define LCD_LEDC_CH            1
 
-
 static const char *TAG = "ui_main";
 
-LV_FONT_DECLARE(font_icon_16);
-//LV_FONT_DECLARE(font_HarmonyOS_Sans_Light_16);
 LV_FONT_DECLARE(font_cn_gb1_16);
 
-static const lv_font_t *main_font = &font_cn_gb1_16;
+const lv_font_t *main_font = &font_cn_gb1_16;
 
+static int g_last_index = -1;
 static int g_item_index = 0;
 static lv_group_t *g_btn_op_group = NULL;
 static button_style_t g_btn_styles;
-static lv_obj_t *g_page_menu = NULL;
+static lv_obj_t *g_page_body = NULL;
 
 /* Creates a semaphore to handle concurrent call to lvgl stuff
  * If you wish to call *any* lvgl function from other threads/tasks
@@ -57,7 +55,6 @@ void ui_release(void)
 {
     bsp_display_unlock();
 }
-
 
 static void ui_button_style_init(void)
 {
@@ -169,205 +166,75 @@ static void ui_help(void)
 //    ui_hint_start(hint_end_cb);
 }
 
-typedef struct {
-    char *name;
-    void *img_src;
-} item_desc_t;
-
 LV_IMG_DECLARE(icon_about_us)
 LV_IMG_DECLARE(icon_network)
 LV_IMG_DECLARE(icon_book)
-//LV_IMG_DECLARE(icon_bilibili)
 
-static item_desc_t item[] = {
-    { .name = "书籍",      .img_src = (void *) &icon_book},
-    { .name = "网络设置",   .img_src = (void *) &icon_network},
-    { .name = "关于",      .img_src = (void *) &icon_about_us},
-};
 
 static enum page_index_t {
-    PAGE_BOOK_INDEX,
-    PAGE_NET_CONFIG_INDEX,
-    PAGE_ABOUT_US_INDEX,
+    PAGE_HOME,
+//    PAGE_NET_CONFIG_INDEX,
+//    PAGE_ABOUT_US_INDEX,
+    PAGE_COUNT
 };
 
-static lv_obj_t *g_img_btn, *g_img_item = NULL;
-static lv_obj_t *g_lab_item = NULL;
-static lv_obj_t *g_led_item[3];
-static size_t g_item_size = sizeof(item) / sizeof(item[0]);
+typedef struct {
+    void (*render)(lv_obj_t *);
+    void (*destroy)();
+} PageDef;
 
-static lv_obj_t *g_focus_last_obj = NULL;
-static lv_obj_t *g_group_list[3] = {0};
+static PageDef pages[] = {
+        {page_home_render, page_home_destroy},
+};
 
-static uint32_t menu_get_num_offset(uint32_t focus, int32_t max, int32_t offset)
+static lv_obj_t *g_container = NULL;
+static lv_obj_t *g_led_item[PAGE_COUNT];
+
+
+void menu_new_item_select(int new_index)
 {
-    if (focus >= max) {
-        ESP_LOGI(TAG, "[ERROR] focus should less than max");
-        return focus;
+    lv_led_off(g_led_item[g_item_index]);
+    g_item_index = new_index % PAGE_COUNT;
+
+    if (g_last_index == g_item_index) {
+        return;
     }
 
-    uint32_t i;
-    if (offset >= 0) {
-        i = (focus + offset) % max;
-    } else {
-        offset = max + (offset % max);
-        i = (focus + offset) % max;
-    }
-    return i;
-}
+    g_last_index = g_item_index;
 
-static int8_t menu_direct_probe(lv_obj_t *focus_obj)
-{
-    int8_t direct;
-    uint32_t index_max_sz, index_focus, index_prev;
 
-    index_focus = 0;
-    index_prev = 0;
-    index_max_sz = sizeof(g_group_list)/ sizeof(g_group_list[0]);
-
-    for(int i = 0; i< index_max_sz; i++){
-        if(focus_obj == g_group_list[i]){
-            index_focus = i;
-        }
-        if(g_focus_last_obj == g_group_list[i]){
-            index_prev = i;
-        }
-    }
-
-    if(NULL == g_focus_last_obj){
-        direct = 0;
-    } else if(index_focus == menu_get_num_offset(index_prev, index_max_sz, 1)){
-        direct = 1;
-    } else if(index_focus == menu_get_num_offset(index_prev, index_max_sz, -1)){
-        direct = -1;
-    } else {
-        direct = 0;
-    }
-
-    g_focus_last_obj = focus_obj;
-    return direct;
-}
-
-void menu_new_item_select(lv_obj_t *obj)
-{
-    int8_t direct = menu_direct_probe(obj);
-    g_item_index = menu_get_num_offset(g_item_index, g_item_size, direct);
-    ESP_LOGI(TAG, "slected:%d, direct:%d", g_item_index, direct);
+    ESP_LOGI(TAG, "slected:%d", g_item_index);
 
     lv_led_on(g_led_item[g_item_index]);
-    lv_img_set_src(g_img_item, item[g_item_index].img_src);
-    lv_label_set_text_static(g_lab_item, item[g_item_index].name);
-}
 
-static void menu_prev_cb(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t *obj = lv_event_get_user_data(e);
+    pages[g_item_index].destroy();
 
-    if (LV_EVENT_FOCUSED == code) {
-        lv_led_off(g_led_item[g_item_index]);
-        menu_new_item_select(obj);
-    } else if (LV_EVENT_CLICKED == code) {
-        lv_event_send(g_img_btn, LV_EVENT_CLICKED, g_img_btn);
+    // 清空容器
+    lv_obj_clean(g_container);
 
-    }
-}
-
-static void menu_next_cb(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t *obj = lv_event_get_user_data(e);
-
-    if (LV_EVENT_FOCUSED == code) {
-        lv_led_off(g_led_item[g_item_index]);
-        menu_new_item_select(obj);
-    } else if (LV_EVENT_CLICKED == code) {
-        lv_event_send(g_img_btn, LV_EVENT_CLICKED, g_img_btn);
-    }
-}
-
-static void menu_enter_cb(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t *obj = lv_event_get_user_data(e);
-
-    if (LV_EVENT_FOCUSED == code) {
-        lv_led_off(g_led_item[g_item_index]);
-        menu_new_item_select(obj);
-    } else if (LV_EVENT_CLICKED == code) {
-        lv_obj_t * menu_btn_parent = lv_obj_get_parent(obj);
-        ESP_LOGI(TAG, "menu click, item index = %d", g_item_index);
-        if (ui_get_btn_op_group()) {
-            lv_group_remove_all_objs(ui_get_btn_op_group());
-        }
-        ui_btn_rm_all_cb();
-        ui_led_set_visible(false);
-        lv_obj_del(menu_btn_parent);
-        g_focus_last_obj = NULL;
-
-        switch (g_item_index) {
-        case PAGE_BOOK_INDEX:
-            ui_status_bar_set_visible(true);
-//            ui_book_start(book_end_cb);
-            break;
-        case PAGE_NET_CONFIG_INDEX:
-            ui_status_bar_set_visible(true);
-            ui_net_config_start(net_end_cb);
-            break;
-        case PAGE_ABOUT_US_INDEX:
-            ui_status_bar_set_visible(true);
-//            ui_about_us_start(about_us_end_cb);
-            break;
-        default:
-            break;
-        }
-    }
+    pages[g_item_index].render(g_container);
 }
 
 static void ui_main_menu(int32_t index_id)
 {
-    if (!g_page_menu) {
-        g_page_menu = lv_obj_create(lv_scr_act());
-        lv_obj_set_size(g_page_menu, lv_obj_get_width(lv_obj_get_parent(g_page_menu)), lv_obj_get_height(lv_obj_get_parent(g_page_menu)) - lv_obj_get_height(ui_main_get_status_bar()));
-        lv_obj_set_style_border_width(g_page_menu, 0, LV_PART_MAIN);
-        lv_obj_set_style_bg_color(g_page_menu, lv_obj_get_style_bg_color(lv_scr_act(), LV_STATE_DEFAULT), LV_PART_MAIN);
-        lv_obj_clear_flag(g_page_menu, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_align_to(g_page_menu, ui_main_get_status_bar(), LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0);
+    if (!g_page_body) {
+        // 菜单页面（功能选择）
+        g_page_body = lv_obj_create(lv_scr_act());
+        lv_obj_set_size(g_page_body, lv_obj_get_width(lv_obj_get_parent(g_page_body)), lv_obj_get_height(lv_obj_get_parent(g_page_body)) - lv_obj_get_height(ui_main_get_status_bar()));
+        lv_obj_set_style_border_width(g_page_body, 0, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_page_body, lv_obj_get_style_bg_color(lv_scr_act(), LV_STATE_DEFAULT), LV_PART_MAIN);
+        lv_obj_clear_flag(g_page_body, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_align_to(g_page_body, ui_main_get_status_bar(), LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0);
     }
     ui_status_bar_set_visible(true);
 
-    lv_obj_t *obj = lv_obj_create(g_page_menu);
-    lv_obj_set_size(obj, 220, 100);
-    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_radius(obj, 15, LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(obj, 0, LV_STATE_DEFAULT);
-    lv_obj_set_style_shadow_width(obj, 20, LV_PART_MAIN);
-    lv_obj_set_style_shadow_opa(obj, LV_OPA_30, LV_PART_MAIN);
-    lv_obj_align(obj, LV_ALIGN_TOP_MID, 0, -12);
-
-    g_img_btn = lv_btn_create(obj);
-    lv_obj_set_size(g_img_btn, 50, 50);
-    lv_obj_add_style(g_img_btn, &ui_button_styles()->style_pr, LV_STATE_PRESSED);
-    lv_obj_add_style(g_img_btn, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUS_KEY);
-    lv_obj_add_style(g_img_btn, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUSED);
-    lv_obj_set_style_bg_color(g_img_btn, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_shadow_color(g_img_btn, lv_color_make(0, 0, 0), LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(g_img_btn, 15, LV_PART_MAIN);
-    lv_obj_set_style_shadow_ofs_x(g_img_btn, 0, LV_PART_MAIN);
-    lv_obj_set_style_shadow_ofs_y(g_img_btn, 0, LV_PART_MAIN);
-    lv_obj_set_style_shadow_opa(g_img_btn, LV_OPA_50, LV_PART_MAIN);
-    lv_obj_set_style_radius(g_img_btn, 25, LV_PART_MAIN);
-    lv_obj_align(g_img_btn, LV_ALIGN_CENTER, 0, -20);
-    lv_obj_add_event_cb(g_img_btn, menu_enter_cb, LV_EVENT_ALL, g_img_btn);
-
-    g_img_item = lv_img_create(g_img_btn);
-    lv_img_set_src(g_img_item, item[index_id].img_src);
-    lv_obj_center(g_img_item);
-
-    g_lab_item = lv_label_create(obj);
-    lv_label_set_text_static(g_lab_item, item[index_id].name);
-    lv_obj_set_style_text_font(g_lab_item, main_font, LV_PART_MAIN);
-    lv_obj_align(g_lab_item, LV_ALIGN_CENTER, 0, 60);
+    // 首页容器
+    g_container = lv_obj_create(g_page_body);
+    lv_obj_set_size(g_container, 220, 100);
+    lv_obj_clear_flag(g_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_radius(g_container, 15, LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(g_container, 0, LV_STATE_DEFAULT);
+    lv_obj_align(g_container, LV_ALIGN_TOP_MID, 0, -12);
 
     int g_led_count = sizeof(g_led_item) / sizeof(g_led_item[0]);
     short g_led_size = 5;
@@ -377,75 +244,24 @@ static void ui_main_menu(int32_t index_id)
     short offset_x = (g_led_size) / 2;
     for (size_t i = 0; i < g_led_count; i++) {
         if (NULL == g_led_item[i]) {
-            g_led_item[i] = lv_led_create(g_page_menu);
+            g_led_item[i] = lv_led_create(g_page_body);
         } else {
             lv_obj_clear_flag(g_led_item[i], LV_OBJ_FLAG_HIDDEN);
         }
         lv_led_off(g_led_item[i]);
         lv_obj_set_size(g_led_item[i], g_led_size, g_led_size);
         int g_led_item_off_x = i / (g_led_count-1.0) * outer_width - half_width;
-        lv_obj_align_to(g_led_item[i], g_page_menu, LV_ALIGN_BOTTOM_MID, g_led_item_off_x - offset_x, 0);
+        lv_obj_align_to(g_led_item[i], g_page_body, LV_ALIGN_BOTTOM_MID, g_led_item_off_x - offset_x, 0);
     }
     lv_led_on(g_led_item[index_id]);
 
-    lv_obj_t *btn_prev = lv_btn_create(obj);
-    lv_obj_add_style(btn_prev, &ui_button_styles()->style_pr, LV_STATE_PRESSED);
-    lv_obj_add_style(btn_prev, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUS_KEY);
-    lv_obj_add_style(btn_prev, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUSED);
-
-    lv_obj_set_size(btn_prev, 20, 20);
-    lv_obj_set_style_bg_color(btn_prev, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_shadow_color(btn_prev, lv_color_make(0, 0, 0), LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(btn_prev, 15, LV_PART_MAIN);
-    lv_obj_set_style_shadow_opa(btn_prev, LV_OPA_50, LV_PART_MAIN);
-    lv_obj_set_style_shadow_ofs_x(btn_prev, 0, LV_PART_MAIN);
-    lv_obj_set_style_shadow_ofs_y(btn_prev, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(btn_prev, 20, LV_PART_MAIN);
-    lv_obj_align_to(btn_prev, obj, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_t *label = lv_label_create(btn_prev);
-    lv_label_set_text_static(label, LV_SYMBOL_LEFT);
-    lv_obj_set_style_text_color(label, lv_color_make(5, 5, 5), LV_PART_MAIN);
-    lv_obj_center(label);
-    lv_obj_add_event_cb(btn_prev, menu_prev_cb, LV_EVENT_ALL, btn_prev);
-
-    if (ui_get_btn_op_group()) {
-        lv_group_add_obj(ui_get_btn_op_group(), btn_prev);
-    }
-    g_group_list[0] = btn_prev;
-
-    if (ui_get_btn_op_group()) {
-        lv_group_add_obj(ui_get_btn_op_group(), g_img_btn);
-    }
-    g_group_list[1] = g_img_btn;
-
-    lv_obj_t *btn_next = lv_btn_create(obj);
-    lv_obj_add_style(btn_next, &ui_button_styles()->style_pr, LV_STATE_PRESSED);
-    lv_obj_add_style(btn_next, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUS_KEY);
-    lv_obj_add_style(btn_next, &ui_button_styles()->style_focus_no_outline, LV_STATE_FOCUSED);
-
-    lv_obj_set_size(btn_next, 20, 20);
-    lv_obj_set_style_bg_color(btn_next, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_shadow_color(btn_next, lv_color_make(0, 0, 0), LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(btn_next, 15, LV_PART_MAIN);
-    lv_obj_set_style_shadow_opa(btn_next, LV_OPA_50, LV_PART_MAIN);
-    lv_obj_set_style_shadow_ofs_x(btn_next, 0, LV_PART_MAIN);
-    lv_obj_set_style_shadow_ofs_y(btn_next, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(btn_next, 20, LV_PART_MAIN);
-    lv_obj_align_to(btn_next, obj, LV_ALIGN_RIGHT_MID, 0, 0);
-    label = lv_label_create(btn_next);
-    lv_label_set_text_static(label, LV_SYMBOL_RIGHT);
-    lv_obj_set_style_text_color(label, lv_color_make(5, 5, 5), LV_PART_MAIN);
-    lv_obj_center(label);
-    lv_obj_add_event_cb(btn_next, menu_next_cb, LV_EVENT_ALL, btn_next);
-
-    if (ui_get_btn_op_group()) {
-        lv_group_add_obj(ui_get_btn_op_group(), btn_next);
-    }
-    g_group_list[2] = btn_next;
+    menu_new_item_select(index_id);
 }
 
 static void ui_after_boot(void)
 {
+    // TODO: 播放启动动画
+
     ui_main_menu(g_item_index);
 }
 
@@ -485,27 +301,8 @@ void weather_run_task(void *timer2)
     vTaskDelete(NULL);
 }
 
-esp_err_t ui_main_start(void)
+static void ui_create_status_bar()
 {
-    ui_acquire();
-    lv_obj_set_style_bg_color(lv_scr_act(), lv_color_make(237, 238, 239), LV_STATE_DEFAULT);
-    ui_button_style_init();
-
-    lv_indev_t *indev = lv_indev_get_next(NULL);
-
-    lv_indev_type_t indev_type = lv_indev_get_type(indev);
-
-    if ((indev_type == LV_INDEV_TYPE_KEYPAD) || indev_type == LV_INDEV_TYPE_ENCODER) {
-        ESP_LOGI(TAG, "Input device type is keypad");
-        g_btn_op_group = lv_group_create();
-        lv_indev_set_group(indev, g_btn_op_group);
-    } else if (indev_type == LV_INDEV_TYPE_BUTTON) {
-        ESP_LOGI(TAG, "Input device type have button");
-    } else if (indev_type == LV_INDEV_TYPE_POINTER) {
-        ESP_LOGI(TAG, "Input device type have pointer");
-    }
-
-    // Create status bar
     g_status_bar = lv_obj_create(lv_scr_act());
     lv_obj_set_size(g_status_bar, lv_obj_get_width(lv_obj_get_parent(g_status_bar)), 30);
     lv_obj_clear_flag(g_status_bar, LV_OBJ_FLAG_SCROLLABLE);
@@ -533,6 +330,62 @@ esp_err_t ui_main_start(void)
     lv_obj_align_to(g_lab_wifi, lab_weather, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
 
     ui_status_bar_set_visible(0);
+}
+
+static void button_single_click_cb(void *arg,void *usr_data)
+{
+    ESP_LOGI(TAG, "BUTTON_SINGLE_CLICK");
+
+    menu_new_item_select(g_item_index + 1);
+}
+
+static void button_long_click_start_cb(void *arg,void *usr_data)
+{
+    ESP_LOGI(TAG, "BUTTON_LONG_CLICK_START");
+}
+
+esp_err_t ui_main_start(void)
+{
+    ui_acquire();
+    lv_obj_set_style_bg_color(lv_scr_act(), lv_color_make(237, 238, 239), LV_STATE_DEFAULT);
+    ui_button_style_init();
+
+    lv_indev_t *indev = lv_indev_get_next(NULL);
+
+    lv_indev_type_t indev_type = lv_indev_get_type(indev);
+
+    if ((indev_type == LV_INDEV_TYPE_KEYPAD) || indev_type == LV_INDEV_TYPE_ENCODER) {
+        ESP_LOGI(TAG, "Input device type is keypad");
+        g_btn_op_group = lv_group_create();
+        lv_indev_set_group(indev, g_btn_op_group);
+    } else if (indev_type == LV_INDEV_TYPE_BUTTON) {
+        ESP_LOGI(TAG, "Input device type have button");
+    } else if (indev_type == LV_INDEV_TYPE_POINTER) {
+        ESP_LOGI(TAG, "Input device type have pointer");
+    }
+
+    // Create status bar
+    ui_create_status_bar();
+    // status bar end
+
+    // create gpio button
+    button_config_t gpio_btn_cfg = {
+            .type = BUTTON_TYPE_GPIO,
+            .long_press_time = CONFIG_BUTTON_LONG_PRESS_TIME_MS,
+            .short_press_time = CONFIG_BUTTON_SHORT_PRESS_TIME_MS,
+            .gpio_button_config = {
+                    .gpio_num = GPIO_NUM_0,
+                    .active_level = 0,
+            },
+    };
+    button_handle_t gpio_btn = iot_button_create(&gpio_btn_cfg);
+    if(NULL == gpio_btn) {
+        ESP_LOGE(TAG, "Button create failed");
+    }
+
+
+    iot_button_register_cb(gpio_btn, BUTTON_SINGLE_CLICK, button_single_click_cb,NULL);
+    iot_button_register_cb(gpio_btn, BUTTON_LONG_PRESS_START, button_long_click_start_cb,NULL);
 
     ui_after_boot();
 

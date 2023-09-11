@@ -17,19 +17,21 @@
 #include <nvs_flash.h>
 
 #include <wifi_provisioning/manager.h>
-#include <wifi_provisioning/scheme_ble.h>
-#include <wifi_provisioning/scheme_softap.h>
 #include <lwip/inet.h>
+#include <esp_task_wdt.h>
+#include <esp_check.h>
 
 #include "app_wifi.h"
 #include "app_sntp.h"
 //#include "ui_main.h"
 //#include "ui_net_config.h"
 #include "esp_mac.h"
+#include "dns_server.h"
+#include "captive_portal.h"
 
 static bool s_connected = false;
 static char s_payload[150] = "";
-static const char *TAG = "app_wifi";
+static const char *TAG = "APP_WIFI";
 static const int WIFI_CONNECTED_EVENT = BIT0;
 static EventGroupHandle_t wifi_event_group;
 
@@ -38,15 +40,17 @@ esp_netif_t* netif;
 #define PROV_QR_VERSION "v1"
 #define PROV_TRANSPORT_BLE  "ble"
 
-#define NVS_PARTITION_NAME      "fctry"
-#define CREDENTIALS_NAMESPACE   "rmaker_creds"
-#define RANDOM_NVS_KEY          "random"
-
 #define FOLLOME2_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define FOLLOME2_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
 #define FOLLOME2_ESP_WIFI_CHANNEL   CONFIG_ESP_WIFI_CHANNEL
 #define FOLLOME2_MAX_STA_CONN       CONFIG_ESP_MAX_STA_CONN
 
+static void wifi_start_softap(void);
+static void wifi_init_sta(void);
+
+static bool provisioned = false;
+
+static dns_server_handle_t dns_server;
 
 static void app_wifi_print_qr(const char *name)
 {
@@ -70,19 +74,40 @@ char *app_wifi_get_prov_payload(void)
 static void event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data)
 {
+    if (event_base == WIFI_EVENT) {
+        ESP_LOGD(TAG, "Event --- WIFI_EVENT -- %ld", event_id);
 
+        if (event_id == WIFI_EVENT_AP_STACONNECTED) {
+            wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
+            ESP_LOGI(TAG, "station "MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
+        } else if (event_id == WIFI_EVENT_AP_STADISCONNECTED) {
+            wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
+            ESP_LOGI(TAG, "station "MACSTR" leave, AID=%d", MAC2STR(event->mac), event->aid);
+        } else if (event_id == WIFI_EVENT_AP_START) {
+            ESP_LOGI(TAG, "WIFI_EVENT_AP_START");
+        } else if (event_id == WIFI_EVENT_STA_START) {
+            ESP_LOGD(TAG, "Event --- WIFI_EVENT_STA_START");
 
-    if (event_id == WIFI_EVENT_AP_STACONNECTED) {
-        wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
-        ESP_LOGI(TAG, "station "MACSTR" join, AID=%d",
-                 MAC2STR(event->mac), event->aid);
-    } else if (event_id == WIFI_EVENT_AP_STADISCONNECTED) {
-        wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
-        ESP_LOGI(TAG, "station "MACSTR" leave, AID=%d",
-                 MAC2STR(event->mac), event->aid);
-    }
+            ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&provisioned));
 
-    if (event_base == WIFI_PROV_EVENT) {
+            if (provisioned) {
+                ESP_ERROR_CHECK(esp_wifi_connect());
+            }
+
+//        ui_net_config_update_cb(UI_NET_EVT_START_CONNECT, NULL);
+        esp_wifi_connect();
+        } else if (event_id == WIFI_EVENT_WIFI_READY) {
+            ESP_LOGD(TAG, "Event --- WIFI_EVENT_WIFI_READY");
+            ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G));
+        } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
+            ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
+//        esp_wifi_connect();
+            s_connected = 0;
+//        ui_acquire();
+//        ui_main_status_bar_set_wifi(s_connected);
+//        ui_release();
+        }
+    } else if (event_base == WIFI_PROV_EVENT) {
         switch (event_id) {
         case WIFI_PROV_START:
             ESP_LOGI(TAG, "Provisioning started");
@@ -121,13 +146,6 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         default:
             break;
         }
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        ESP_LOGD(TAG, "Event --- WIFI_EVENT_STA_START");
-//        ui_net_config_update_cb(UI_NET_EVT_START_CONNECT, NULL);
-        esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_WIFI_READY) {
-        ESP_LOGD(TAG, "Event --- WIFI_EVENT_WIFI_READY");
-        ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G));
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
@@ -137,71 +155,16 @@ static void event_handler(void *arg, esp_event_base_t event_base,
 //        ui_release();
         /* Signal main application to continue execution */
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_EVENT);
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
-        esp_wifi_connect();
-        s_connected = 0;
-//        ui_acquire();
-//        ui_main_status_bar_set_wifi(s_connected);
-//        ui_release();
     }
 }
 
-static void wifi_init_sta()
+static void wifi_start_sta()
 {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-/* Free random_bytes after use only if function returns ESP_OK */
-static esp_err_t read_random_bytes_from_nvs(uint8_t **random_bytes, size_t *len)
-{
-    nvs_handle handle;
-    esp_err_t err;
-    *len = 0;
-
-    if ((err = nvs_open_from_partition(NVS_PARTITION_NAME, CREDENTIALS_NAMESPACE,
-                                       NVS_READONLY, &handle)) != ESP_OK) {
-        ESP_LOGD(TAG, "NVS open for %s %s %s failed with error %d", NVS_PARTITION_NAME, CREDENTIALS_NAMESPACE, RANDOM_NVS_KEY, err);
-        return ESP_FAIL;
-    }
-
-    if ((err = nvs_get_blob(handle, RANDOM_NVS_KEY, NULL, len)) != ESP_OK) {
-        ESP_LOGD(TAG, "Error %d. Failed to read key %s.", err, RANDOM_NVS_KEY);
-        nvs_close(handle);
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    *random_bytes = calloc(*len, 1);
-    if (*random_bytes) {
-        nvs_get_blob(handle, RANDOM_NVS_KEY, *random_bytes, len);
-        nvs_close(handle);
-        return ESP_OK;
-    }
-    nvs_close(handle);
-    return ESP_ERR_NO_MEM;
-}
-
-static esp_err_t get_device_service_name(char *service_name, size_t max)
-{
-    uint8_t *nvs_random = NULL;
-    const char *ssid_prefix = "BOX_";
-    size_t nvs_random_size = 0;
-    if ((read_random_bytes_from_nvs(&nvs_random, &nvs_random_size) != ESP_OK) || nvs_random_size < 3) {
-        uint8_t eth_mac[6];
-        esp_wifi_get_mac(WIFI_IF_STA, eth_mac);
-        snprintf(service_name, max, "%s%02x%02x%02x", ssid_prefix, eth_mac[3], eth_mac[4], eth_mac[5]);
-    } else {
-        snprintf(service_name, max, "%s%02x%02x%02x", ssid_prefix, nvs_random[nvs_random_size - 3],
-                 nvs_random[nvs_random_size - 2], nvs_random[nvs_random_size - 1]);
-    }
-
-    if (nvs_random) {
-        free(nvs_random);
-    }
-    return ESP_OK;
-}
 
 void app_wifi_init(void)
 {
@@ -216,64 +179,44 @@ void app_wifi_init(void)
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL));
 
-    /* Initialize Wi-Fi including netif with default config */
-    netif = esp_netif_create_default_wifi_sta();
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 }
 
 esp_err_t app_wifi_start(void)
 {
-//    ui_net_config_update_cb(UI_NET_EVT_START, NULL);
-    /* Provisioning framework initialization */
-    wifi_prov_mgr_config_t config = {
-        .scheme = wifi_prov_scheme_ble,
-        .scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
-    };
-    ESP_ERROR_CHECK(wifi_prov_mgr_init(config));
+    ESP_LOGD(TAG, "app_wifi_start() ENTER");
 
-    /* If device is not yet provisioned start provisioning service */
-    bool provisioned = false;
-    ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&provisioned));
+    wifi_init_sta();
+
+    // 检查是否已配网成功
+    esp_err_t err = wifi_prov_mgr_is_provisioned(&provisioned);
+    ESP_ERROR_CHECK(err);
+
+    ESP_LOGD(TAG, "isProvisioned %d", provisioned);
+
     if (!provisioned) {
-        ESP_LOGI(TAG, "Starting provisioning");
-//        ui_net_config_update_cb(UI_NET_EVT_START_PROV, NULL);
-        ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_MIN_MODEM));
+        wifi_start_softap();
 
-        /* Get bluetooth broadcast name */
-        char service_name[12];
-        esp_err_t err = get_device_service_name(service_name, sizeof(service_name));
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "get_device_service_name failed %d", err);
-            return err;
-        };
+        start_captive_portal();
 
-        /**
-         * @brief Set product information
-         *
-         * @note Please do not change, otherwise the ESP BOX App will not be able to discover the device
-         *
-         */
-        uint8_t mfg[] = { 0xe5, 0x02, 'N', 'o', 'v', 'a', 0x00, 0x02, 0x00, 0xF0, 0x01, 0x00 };
-        err = wifi_prov_scheme_ble_set_mfg_data(mfg, sizeof(mfg));
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "wifi_prov_scheme_ble_set_mfg_data failed %d", err);
-            return err;
-        }
+        // Start the DNS server that will redirect all queries to the softAP IP
+        dns_server_config_t config = DNS_SERVER_CONFIG_SINGLE("*" /* all A queries */, "WIFI_AP_DEF" /* softAP netif ID */);
+        dns_server = start_dns_server(&config);
 
-        /* Start provisioning */
-        ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(WIFI_PROV_SECURITY_1, NULL, service_name, NULL));
-        app_wifi_print_qr(service_name);
-//        ui_net_config_update_cb(UI_NET_EVT_GET_NAME, NULL);
-        ESP_LOGI(TAG, "Provisioning Started. Name : %s", service_name);
     } else {
-        ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
-        wifi_prov_mgr_deinit();
-        wifi_init_sta();
-    }
+        wifi_config_t config;
+        esp_wifi_get_config(WIFI_IF_STA, &config);
+
+        ESP_LOGD(TAG, "WIFI_IF_STA SSID %s / Password: %s", config.sta.ssid, config.sta.password);
+
+        wifi_start_sta();
+    };
 
     xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, false, true, portMAX_DELAY);
+
+    ESP_LOGD(TAG, "app_wifi_start() WAIT_WIFI_CONNECT ---> OK");
 //    ui_net_config_update_cb(UI_NET_EVT_WIFI_CONNECTED, NULL);
+
+    ESP_LOGD(TAG, "app_wifi_start() APP SNTP INIT");
     app_sntp_init();
 
     return ESP_OK;
@@ -294,11 +237,20 @@ esp_err_t app_wifi_get_wifi_ssid(char *ssid, size_t len)
     return ESP_OK;
 }
 
-void wifi_init_softap(void)
+static void wifi_init_sta(void)
 {
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
+    /* Initialize Wi-Fi including netif with default config */
+    netif = esp_netif_create_default_wifi_sta();
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+}
+
+static void wifi_start_softap(void)
+{
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_MIN_MODEM));
+
+//    esp_netif_destroy(netif);
+    netif = esp_netif_create_default_wifi_ap();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -331,7 +283,7 @@ void wifi_init_softap(void)
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
@@ -344,4 +296,135 @@ void wifi_init_softap(void)
 
     ESP_LOGI(TAG, "wifi_init_softap finished. SSID:'%s' password:'%s'",
              FOLLOME2_ESP_WIFI_SSID, FOLLOME2_ESP_WIFI_PASS);
+}
+
+//// WiFi scan
+
+static void print_auth_mode(int authmode)
+{
+    switch (authmode) {
+        case WIFI_AUTH_OPEN:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_OPEN");
+            break;
+        case WIFI_AUTH_OWE:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_OWE");
+            break;
+        case WIFI_AUTH_WEP:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WEP");
+            break;
+        case WIFI_AUTH_WPA_PSK:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA_PSK");
+            break;
+        case WIFI_AUTH_WPA2_PSK:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_PSK");
+            break;
+        case WIFI_AUTH_WPA_WPA2_PSK:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA_WPA2_PSK");
+            break;
+        case WIFI_AUTH_WPA2_ENTERPRISE:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_ENTERPRISE");
+            break;
+        case WIFI_AUTH_WPA3_PSK:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA3_PSK");
+            break;
+        case WIFI_AUTH_WPA2_WPA3_PSK:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_WPA3_PSK");
+            break;
+        default:
+            ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_UNKNOWN");
+            break;
+    }
+}
+
+static void print_cipher_type(int pairwise_cipher, int group_cipher)
+{
+    switch (pairwise_cipher) {
+        case WIFI_CIPHER_TYPE_NONE:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_NONE");
+            break;
+        case WIFI_CIPHER_TYPE_WEP40:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_WEP40");
+            break;
+        case WIFI_CIPHER_TYPE_WEP104:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_WEP104");
+            break;
+        case WIFI_CIPHER_TYPE_TKIP:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_TKIP");
+            break;
+        case WIFI_CIPHER_TYPE_CCMP:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_CCMP");
+            break;
+        case WIFI_CIPHER_TYPE_TKIP_CCMP:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
+            break;
+        case WIFI_CIPHER_TYPE_AES_CMAC128:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_AES_CMAC128");
+            break;
+        case WIFI_CIPHER_TYPE_SMS4:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_SMS4");
+            break;
+        case WIFI_CIPHER_TYPE_GCMP:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_GCMP");
+            break;
+        case WIFI_CIPHER_TYPE_GCMP256:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_GCMP256");
+            break;
+        default:
+            ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
+            break;
+    }
+
+    switch (group_cipher) {
+        case WIFI_CIPHER_TYPE_NONE:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_NONE");
+            break;
+        case WIFI_CIPHER_TYPE_WEP40:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_WEP40");
+            break;
+        case WIFI_CIPHER_TYPE_WEP104:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_WEP104");
+            break;
+        case WIFI_CIPHER_TYPE_TKIP:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_TKIP");
+            break;
+        case WIFI_CIPHER_TYPE_CCMP:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_CCMP");
+            break;
+        case WIFI_CIPHER_TYPE_TKIP_CCMP:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
+            break;
+        case WIFI_CIPHER_TYPE_SMS4:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_SMS4");
+            break;
+        case WIFI_CIPHER_TYPE_GCMP:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_GCMP");
+            break;
+        case WIFI_CIPHER_TYPE_GCMP256:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_GCMP256");
+            break;
+        default:
+            ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
+            break;
+    }
+}
+
+/* Initialize Wi-Fi as sta and set scan method */
+esp_err_t wifi_scan(uint16_t number, wifi_ap_record_t *ap_info, uint16_t *ap_count)
+{
+    ESP_RETURN_ON_ERROR(esp_wifi_scan_start(NULL, true), TAG, "");
+    ESP_RETURN_ON_ERROR(esp_wifi_scan_get_ap_records(&number, ap_info), TAG, "");
+    ESP_RETURN_ON_ERROR(esp_wifi_scan_get_ap_num(ap_count), TAG, "");
+    ESP_LOGI(TAG, "Total APs scanned = %u", *ap_count);
+
+    for (int i = 0; (i < number) && (i < *ap_count); i++) {
+        ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
+        ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
+        print_auth_mode(ap_info[i].authmode);
+        if (ap_info[i].authmode != WIFI_AUTH_WEP) {
+            print_cipher_type(ap_info[i].pairwise_cipher, ap_info[i].group_cipher);
+        }
+        ESP_LOGI(TAG, "Channel \t\t%d", ap_info[i].primary);
+    }
+
+    return ESP_OK;
 }

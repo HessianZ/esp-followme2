@@ -5,13 +5,13 @@ idf_component_register(
         "gui"
         "gui/font"
         "gui/image"
+        "gui/page"
 
         INCLUDE_DIRS
         "."
         "app"
         "gui"
-
-        EMBED_FILES root.html
+        "gui/page"
 )
 
 file(GLOB_RECURSE FOLLOWME2_SOURCES ./*.c)
@@ -20,3 +20,5 @@ set_source_files_properties(
         ${FOLLOWME2_SOURCES}
         PROPERTIES COMPILE_OPTIONS
         -DLV_LVGL_H_INCLUDE_SIMPLE)
+
+spiffs_create_partition_image(storage ../spiffs FLASH_IN_PROJECT)

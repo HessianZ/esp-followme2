@@ -26,6 +26,7 @@
 
 #include "gui/ui_main.h"
 #include "bsp/tft-feather.h"
+#include "file_manager.h"
 
 static const char *TAG = "ESP-FOLLOWME2";
 
@@ -42,14 +43,13 @@ void wifi_task(void *args)
 {
     /* Initialize Wi-Fi.
      */
-//    app_wifi_init();
+    app_wifi_init();
 
     /* Start the Wi-Fi. */
-    wifi_init_softap();
-//    esp_err_t err = app_wifi_start();
-//    if (err != ESP_OK) {
-//        ESP_LOGE(TAG, "Could not start Wifi");
-//    }
+    esp_err_t err = app_wifi_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Could not start Wifi");
+    }
 
     vTaskDelete(NULL);
 }
@@ -58,10 +58,17 @@ void wifi_task(void *args)
 void app_main(void)
 {
     esp_log_level_set("TFT-FEATHER", ESP_LOG_VERBOSE);
-    esp_log_level_set("ledc", ESP_LOG_VERBOSE);
-    esp_log_level_set("LVGL", ESP_LOG_VERBOSE);
-    esp_log_level_set("lcd_panel.st7789", ESP_LOG_VERBOSE);
-    esp_log_level_set("lcd_panel.io.spi", ESP_LOG_VERBOSE);
+//    esp_log_level_set("ledc", ESP_LOG_VERBOSE);
+    esp_log_level_set("CAPTIVE_PORTAL", ESP_LOG_VERBOSE);
+    esp_log_level_set("APP_WIFI", ESP_LOG_VERBOSE);
+    esp_log_level_set("httpd_txrx", ESP_LOG_VERBOSE);
+//    esp_log_level_set("httpd", ESP_LOG_VERBOSE);
+//    esp_log_level_set("httpd_uri", ESP_LOG_VERBOSE);
+//    esp_log_level_set("esp_netif_handlers", ESP_LOG_VERBOSE);
+    esp_log_level_set("DNS_SERVER", ESP_LOG_WARN);
+//    esp_log_level_set("LVGL", ESP_LOG_VERBOSE);
+//    esp_log_level_set("lcd_panel.st7789", ESP_LOG_VERBOSE);
+//    esp_log_level_set("lcd_panel.io.spi", ESP_LOG_VERBOSE);
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -70,15 +77,13 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    bsp_spiffs_mount();
+
+
+    TraverseDir(CONFIG_BSP_SPIFFS_MOUNT_POINT, 0, 1);
+
     BaseType_t ret_val = xTaskCreatePinnedToCore(wifi_task, "Wifi Task", 4 * 1024, NULL, 1, NULL, 0);
     ESP_ERROR_CHECK_WITHOUT_ABORT((pdPASS == ret_val) ? ESP_OK : ESP_FAIL);
-
-    // Start the server for the first time
-//    start_webserver();
-
-    // Start the DNS server that will redirect all queries to the softAP IP
-//    dns_server_config_t config = DNS_SERVER_CONFIG_SINGLE("*" /* all A queries */, "WIFI_AP_DEF" /* softAP netif ID */);
-//    start_dns_server(&config);
 
     bsp_display_start();
 

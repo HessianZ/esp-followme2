@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="milligram.min.css">
+    <script src="zepto.min.js" type="text/javascript"></script>
+    <style>
+    </style>
+    <title>ESP-Followme2 Captive Portal</title>
+  </head>
+  <body>
+  <div class="container">
+    <h2>ESP-FollowMe2</h2>
+    <p>WiFi WEB配网</p>
+    <form action="/save" method="get" onsubmit="return false">
+      <fieldset>
+        <label for="select-ssids">附近的接入点</label>
+        <select id="select-ssids">
+          <option value="">正在扫描接入点...</option>
+        </select>
+        <label for="input-ssid">SSID</label>
+        <input type="text" id="input-ssid" placeholder="Username" name="ssid" />
+        <label for="input-password">Password</label>
+        <input type="password" id="input-password" placeholder="Password" name="password" />
+        <button id="btn_submit" type="submit">Submit</button>
+      </fieldset>
+    </form>
+    <hr>
+    <div>
+      <p style="text-align: right">Author: <a href="https://hessian.cn/">Hessian(囧大大王)</a></p>
+    </div>
+  </div>
+  <script type="text/javascript">
+    $(function(){
+      const $select = $('#select-ssids')
+      const $firstOption = $('option:first-child', $select)
+
+      $select.change(function() {
+        const selectedOption = $('option', this).eq(this.selectedIndex)
+
+        const ssid = selectedOption.val()
+        if (ssid) {
+          $('#input-ssid').val(ssid)
+        }
+      })
+
+      $.ajax({
+        type: 'GET',
+        url: '/scan',
+        dataType: 'json',
+        timeout: 15*1000,
+        success: function(data){
+          if (Array.isArray(data) && data) {
+            $firstOption.text('扫描到' + data.length + '个接入点')
+
+            if (data.length > 0) {
+              const aps = {}
+              data.forEach(ap => {
+                if (!aps[ap.ssid]) {
+                  aps[ap.ssid] = ap
+                } else if (aps[ap.ssid].rssi < ap.rssi) {
+                  aps[ap.ssid] = ap
+                }
+              })
+
+              const filteredAps = Object.values(aps).sort((a,b) => a.rssi === b.rssi ? 0 :(+a.rssi > +b.rssi ? -1 : 1))
+              $firstOption.text('扫描到' + filteredAps.length + '个接入点')
+              filteredAps.forEach(ap => {
+                $select.append(`<option value="${ap.ssid}">${ap.ssid} (${ap.rssi})</option>`)
+              });
+            }
+          } else {
+            $firstOption.text('获取WiFi列表失败')
+            console.error('获取WiFi列表失败: ' + JSON.stringify(data))
+          }
+        },
+        error: function(xhr, errorType, error){
+          $firstOption.text('获取WiFi列表失败')
+          console.error('获取WiFi列表失败: ' + errorType + ', ' + error)
+        }
+      })
+
+      $('form').submit(function(e) {
+        e.preventDefault();
+        const ssid = $('#input-ssid').val().trim()
+
+        if (!ssid) {
+          alert('请填写SSID')
+          return false;
+        }
+
+        $('#btn_submit').prop('disabled', true)
+
+        $.ajax({
+          type: 'GET',
+          url: this.action,
+          data: $(this).serialize(),
+          dataType: 'text',
+          timeout: 15*1000,
+          success: data => {
+            if (data === 'ok') {
+              alert('保存成功')
+            } else {
+              alert('保存失败：' + data)
+            }
+          },
+          error: (xhr, errorType, error) => {
+            $('#btn_submit').prop('disabled', false)
+            console.error('保存失败: ' + errorType + ', ' + error)
+            alert('保存失败: ' + errorType + ', ' + error)
+          }
+        })
+
+        return false;
+      })
+    })
+  </script>
+  </body>
+</html>

@@ -7,6 +7,7 @@
 
 #include "esp_http_server.h"
 
-httpd_handle_t start_webserver(void);
+httpd_handle_t start_captive_portal(void);
+esp_err_t stop_captive_portal(void);
 
 #endif //ESP_FOLLOWME2_CAPTIVE_PORTAL_H
