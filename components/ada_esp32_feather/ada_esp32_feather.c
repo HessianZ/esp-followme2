@@ -280,7 +280,7 @@ lv_disp_t *bsp_display_start(void)
 
     BSP_NULL_CHECK(disp = bsp_display_lcd_init(), NULL);
 
-    BSP_NULL_CHECK(disp_indev = bsp_display_indev_init(disp), NULL);
+//    BSP_NULL_CHECK(disp_indev = bsp_display_indev_init(disp), NULL);
 
     bsp_display_rotate(disp, LV_DISP_ROT_180);
 
