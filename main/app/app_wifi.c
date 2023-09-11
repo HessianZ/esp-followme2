@@ -28,6 +28,7 @@
 #include "esp_mac.h"
 #include "dns_server.h"
 #include "captive_portal.h"
+#include "ui_main.h"
 
 static bool s_connected = false;
 static char s_payload[150] = "";
@@ -103,9 +104,9 @@ static void event_handler(void *arg, esp_event_base_t event_base,
             ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
 //        esp_wifi_connect();
             s_connected = 0;
-//        ui_acquire();
-//        ui_main_status_bar_set_wifi(s_connected);
-//        ui_release();
+        ui_acquire();
+        ui_main_status_bar_set_wifi(s_connected);
+        ui_release();
         }
     } else if (event_base == WIFI_PROV_EVENT) {
         switch (event_id) {
@@ -150,9 +151,9 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
         s_connected = 1;
-//        ui_acquire();
-//        ui_main_status_bar_set_wifi(s_connected);
-//        ui_release();
+        ui_acquire();
+        ui_main_status_bar_set_wifi(s_connected);
+        ui_release();
         /* Signal main application to continue execution */
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_EVENT);
     }

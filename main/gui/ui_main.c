@@ -6,6 +6,7 @@
 
 #include <sys/time.h>
 #include <driver/ledc.h>
+#include <esp_sntp.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -19,6 +20,7 @@
 #include "esp_lvgl_port.h"
 #include "bsp/tft-feather.h"
 #include "page/page_home.h"
+#include "http.h"
 
 #define LCD_CMD_BITS           8
 #define LCD_PARAM_BITS         8
@@ -26,9 +28,10 @@
 
 static const char *TAG = "ui_main";
 
-LV_FONT_DECLARE(font_cn_gb1_16);
+LV_FONT_DECLARE(font_icon_16);
+LV_FONT_DECLARE(font_OPPOSans_L_16);
 
-const lv_font_t *main_font = &font_cn_gb1_16;
+static const lv_font_t *main_font = &font_OPPOSans_L_16;
 
 static int g_last_index = -1;
 static int g_item_index = 0;
@@ -40,8 +43,10 @@ static lv_obj_t *g_page_body = NULL;
  * If you wish to call *any* lvgl function from other threads/tasks
  * you should lock on the very same semaphore! */
 SemaphoreHandle_t g_guisemaphore;
-static lv_obj_t *g_lab_wifi = NULL;
 static lv_obj_t *g_status_bar = NULL;
+static lv_obj_t *lab_time = NULL;
+static lv_obj_t *lab_weather = NULL;
+static lv_obj_t *g_lab_wifi = NULL;
 
 static void ui_main_menu(int32_t index_id);
 static void ui_led_set_visible(bool visible);
@@ -231,6 +236,7 @@ static void ui_main_menu(int32_t index_id)
     // 首页容器
     g_container = lv_obj_create(g_page_body);
     lv_obj_set_size(g_container, 220, 100);
+    lv_obj_set_style_bg_color(g_container, lv_color_make(0x33, 0x33, 0x33), LV_PART_MAIN);
     lv_obj_clear_flag(g_container, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(g_container, 15, LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(g_container, 0, LV_STATE_DEFAULT);
@@ -267,19 +273,35 @@ static void ui_after_boot(void)
 
 static void clock_run_cb(lv_timer_t *timer)
 {
-    lv_obj_t *lab_time = (lv_obj_t *) timer->user_data;
+    if (!app_wifi_is_connected()) {
+        return;
+    }
+
     time_t now;
     struct tm timeinfo;
     time(&now);
     localtime_r(&now, &timeinfo);
+
+    // time did not set
+    if (timeinfo.tm_year < (2016 - 1900)) {
+        return;
+    }
+
     lv_label_set_text_fmt(lab_time, "%02u-%02u %02u:%02u", timeinfo.tm_mon + 1, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min);
+    lv_obj_align_to(lab_weather, lab_time, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
 }
 
 
 static void weather_run_cb(lv_timer_t *timer)
 {
-    /*
-    lv_obj_t *lab_weather = (lv_obj_t *) timer->user_data;
+    if (!app_wifi_is_connected()) {
+        return;
+    }
+
+    if (timer->period == 1000) {
+        lv_timer_set_period(timer, 120 * 1000);
+    }
+
     weather_result_t result;
     esp_err_t ret = http_get_weather(&result);
     if (ret != ESP_OK) {
@@ -287,18 +309,8 @@ static void weather_run_cb(lv_timer_t *timer)
         return;
     }
 
-    lv_label_set_text_fmt(lab_weather, "%s %s %s℃", result.city, result.weather, result.temp);
-     */
-}
-
-void weather_run_task(void *timer2)
-{
-    while (!app_wifi_is_connected()) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-
-    weather_run_cb((lv_timer_t *)timer2);
-    vTaskDelete(NULL);
+    lv_label_set_text_fmt(lab_weather, "%s%s%s℃", result.city, result.weather, result.temp);
+    lv_obj_align_to(lab_weather, lab_time, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
 }
 
 static void ui_create_status_bar()
@@ -307,27 +319,38 @@ static void ui_create_status_bar()
     lv_obj_set_size(g_status_bar, lv_obj_get_width(lv_obj_get_parent(g_status_bar)), 30);
     lv_obj_clear_flag(g_status_bar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(g_status_bar, 0, LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(g_status_bar, lv_obj_get_style_bg_color(lv_scr_act(), LV_STATE_DEFAULT), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(g_status_bar, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_border_width(g_status_bar, 0, LV_PART_MAIN);
     lv_obj_set_style_shadow_width(g_status_bar, 0, LV_PART_MAIN);
     lv_obj_align(g_status_bar, LV_ALIGN_TOP_MID, 0, 0);
 
-    lv_obj_t *lab_time = lv_label_create(g_status_bar);
-    lv_label_set_text_static(lab_time, "12-12 23:59");
+    lv_color_t text_color = lv_color_make(0x99,0x99, 0x99);
+
+    lab_time = lv_label_create(g_status_bar);
+    lv_obj_set_style_text_font(lab_time, main_font, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lab_time, text_color, LV_STATE_DEFAULT);
+    lv_label_set_text_static(lab_time, "----- --:--");
     lv_obj_align(lab_time, LV_ALIGN_LEFT_MID, 0, 0);
     lv_timer_t *timer = lv_timer_create(clock_run_cb, 1000, (void *) lab_time);
     clock_run_cb(timer);
 
-    lv_obj_t *lab_weather = lv_label_create(g_status_bar);
+    lab_weather = lv_label_create(g_status_bar);
     lv_obj_set_style_text_font(lab_weather, main_font, LV_PART_MAIN);
-    lv_label_set_text_static(lab_weather, "梅州 多云 25℃");
+    lv_obj_set_style_text_color(lab_weather, text_color, LV_STATE_DEFAULT);
+    lv_label_set_text_static(lab_weather, "地区 天气 --℃");
 //    lv_obj_align(lab_time, LV_ALIGN_LEFT_MID, 10, 0);
     lv_obj_align_to(lab_weather, lab_time, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
-    lv_timer_t *timer2 = lv_timer_create(weather_run_cb, 120*1000, (void *) lab_weather);
-    xTaskCreate(weather_run_task, "weather_run_task", 1024*4, timer2, 5, NULL);
+    lv_timer_t *timer2 = lv_timer_create(weather_run_cb, 1000, (void *) lab_weather);
+    weather_run_cb(timer2);
 
     g_lab_wifi = lv_label_create(g_status_bar);
-    lv_obj_align_to(g_lab_wifi, lab_weather, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+    lv_obj_set_size(g_lab_wifi, 30, 30);
+//    lv_obj_set_pos(g_lab_wifi, lv_obj_get_width(g_status_bar) - 30, 30);
+    lv_obj_align(g_lab_wifi, LV_ALIGN_RIGHT_MID, 10, 5);
+    lv_obj_set_style_text_font(g_lab_wifi, &font_icon_16, LV_PART_MAIN);
+    lv_obj_set_style_text_color(g_lab_wifi, text_color, LV_STATE_DEFAULT);
+    lv_obj_add_flag(g_lab_wifi, LV_OBJ_FLAG_FLOATING);
+//    lv_obj_align_to(g_lab_wifi, g_status_bar, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
 
     ui_status_bar_set_visible(0);
 }
@@ -347,7 +370,7 @@ static void button_long_click_start_cb(void *arg,void *usr_data)
 esp_err_t ui_main_start(void)
 {
     ui_acquire();
-    lv_obj_set_style_bg_color(lv_scr_act(), lv_color_make(237, 238, 239), LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(lv_scr_act(), lv_color_make(0, 0, 0), LV_STATE_DEFAULT);
     ui_button_style_init();
 
     lv_indev_t *indev = lv_indev_get_next(NULL);

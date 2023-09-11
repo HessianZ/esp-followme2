@@ -6,12 +6,14 @@ idf_component_register(
         "gui/font"
         "gui/image"
         "gui/page"
+        "http"
 
         INCLUDE_DIRS
         "."
         "app"
         "gui"
         "gui/page"
+        "http"
 )
 
 file(GLOB_RECURSE FOLLOWME2_SOURCES ./*.c)
