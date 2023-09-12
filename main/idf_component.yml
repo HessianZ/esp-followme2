@@ -1,5 +1,6 @@
 ## IDF Component Manager Manifest File
 dependencies:
+  espressif/led_strip: "^2.4.3"
   idf: ">=5.1"
 
   lvgl/lvgl: "8.3.8"

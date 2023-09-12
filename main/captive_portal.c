@@ -180,6 +180,19 @@ static esp_err_t config_get_handler(httpd_req_t *req)
     return send_file_response(req, index_filename);
 }
 
+static void async_wifi_connect(void* arg)
+{
+    ESP_ERROR_CHECK(esp_wifi_stop());
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    // wifi connect will be auto called after start
+    // see app_wifi event handler function.
+    // ESP_ERROR_CHECK(esp_wifi_connect());
+
+    vTaskDelete(NULL);
+}
+
 static esp_err_t save_get_handler(httpd_req_t *req)
 {
     esp_err_t ret = ESP_OK;
@@ -216,12 +229,14 @@ static esp_err_t save_get_handler(httpd_req_t *req)
                 strncpy((char *)wifi_cfg.sta.password, wifi_password, sizeof(wifi_cfg.sta.password));
 
                 httpd_resp_set_type(req, "text/html");
-                ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-                ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
                 if (esp_wifi_set_storage(WIFI_STORAGE_FLASH) == ESP_OK &&
                     esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg) == ESP_OK) {
                     ESP_LOGI(TAG, "WiFi settings applied and stored to flash");
+
                     ret = httpd_resp_sendstr(req, "ok");
+
+                    xTaskCreate(async_wifi_connect, "app_wifi_connect", 4096, NULL, 5, NULL);
+
                 } else {
                     ESP_LOGE(TAG, "Failed to set WiFi config to flash");
                     ret = httpd_resp_sendstr(req, "Failed to configure WiFi settings");

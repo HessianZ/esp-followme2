@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <driver/ledc.h>
 #include <esp_sntp.h>
+#include <esp_wifi.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -21,6 +22,7 @@
 #include "bsp/tft-feather.h"
 #include "page/page_home.h"
 #include "http.h"
+#include "page_led.h"
 
 #define LCD_CMD_BITS           8
 #define LCD_PARAM_BITS         8
@@ -142,35 +144,6 @@ void ui_main_status_bar_set_wifi(bool is_connected)
     }
 }
 
-static void hint_end_cb(void)
-{
-    ESP_LOGI(TAG, "hint end");
-    ui_main_menu(g_item_index);
-}
-
-static void about_us_end_cb(void)
-{
-    ESP_LOGI(TAG, "about_us end");
-    ui_main_menu(g_item_index);
-}
-
-static void book_end_cb(void)
-{
-    ESP_LOGI(TAG, "book end");
-    ui_main_menu(g_item_index);
-}
-
-static void net_end_cb(void)
-{
-    ESP_LOGI(TAG, "net end");
-    ui_main_menu(g_item_index);
-}
-
-static void ui_help(void)
-{
-//    ui_hint_start(hint_end_cb);
-}
-
 LV_IMG_DECLARE(icon_about_us)
 LV_IMG_DECLARE(icon_network)
 LV_IMG_DECLARE(icon_book)
@@ -178,7 +151,7 @@ LV_IMG_DECLARE(icon_book)
 
 static enum page_index_t {
     PAGE_HOME,
-//    PAGE_NET_CONFIG_INDEX,
+    PAGE_LED,
 //    PAGE_ABOUT_US_INDEX,
     PAGE_COUNT
 };
@@ -190,6 +163,7 @@ typedef struct {
 
 static PageDef pages[] = {
         {page_home_render, page_home_destroy},
+        {page_led_render, page_led_destroy},
 };
 
 static lv_obj_t *g_container = NULL;
@@ -205,14 +179,14 @@ void menu_new_item_select(int new_index)
         return;
     }
 
+    if (g_last_index >= 0) {
+        pages[g_last_index].destroy();
+    }
+
     g_last_index = g_item_index;
 
-
     ESP_LOGI(TAG, "slected:%d", g_item_index);
-
     lv_led_on(g_led_item[g_item_index]);
-
-    pages[g_item_index].destroy();
 
     // 清空容器
     lv_obj_clean(g_container);
@@ -251,6 +225,7 @@ static void ui_main_menu(int32_t index_id)
     for (size_t i = 0; i < g_led_count; i++) {
         if (NULL == g_led_item[i]) {
             g_led_item[i] = lv_led_create(g_page_body);
+            lv_led_set_color(g_led_item[i], lv_color_make(0x5D, 0xE8, 0xE6));
         } else {
             lv_obj_clear_flag(g_led_item[i], LV_OBJ_FLAG_HIDDEN);
         }
@@ -362,9 +337,36 @@ static void button_single_click_cb(void *arg,void *usr_data)
     menu_new_item_select(g_item_index + 1);
 }
 
+static void ui_reset_wifi(void)
+{
+    lv_obj_clean(g_container);
+
+    lv_obj_t *lab_text = lv_label_create(g_container);
+
+    lv_label_set_text_static(lab_text, "正在重置系统...");
+    lv_obj_set_style_text_font(lab_text, main_font, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lab_text, lv_color_make(0xDC, 0x64, 0x64), LV_STATE_DEFAULT);
+
+    lv_obj_align(g_container, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(lab_text, LV_ALIGN_CENTER, 0, 0);
+
+    esp_wifi_restore();
+    esp_restart();
+}
+
 static void button_long_click_start_cb(void *arg,void *usr_data)
 {
     ESP_LOGI(TAG, "BUTTON_LONG_CLICK_START");
+
+    switch (g_item_index) {
+        case PAGE_HOME:
+            ESP_LOGW(TAG, "WiFi credential reset");
+            ui_reset_wifi();
+            break;
+        case PAGE_LED:
+            page_led_next_color();
+            break;
+    }
 }
 
 esp_err_t ui_main_start(void)

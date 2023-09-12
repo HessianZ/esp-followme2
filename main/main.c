@@ -7,21 +7,12 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <string.h>
-#include <lwip/inet.h>
-#include <esp_check.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_mac.h"
-#include "esp_wifi.h"
-#include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 
-#include "lwip/err.h"
-#include "lwip/sys.h"
-
-#include "dns_server.h"
-#include "captive_portal.h"
 #include "app_wifi.h"
 
 #include "gui/ui_main.h"
@@ -29,15 +20,6 @@
 #include "file_manager.h"
 
 static const char *TAG = "ESP-FOLLOWME2";
-
-
-static void wifi_credential_reset(void *handle, void *arg)
-{
-    ESP_LOGW(TAG, "WiFi credential reset");
-
-    esp_wifi_restore();
-    esp_restart();
-}
 
 void wifi_task(void *args)
 {
@@ -65,7 +47,8 @@ void app_main(void)
 //    esp_log_level_set("httpd", ESP_LOG_VERBOSE);
 //    esp_log_level_set("httpd_uri", ESP_LOG_VERBOSE);
 //    esp_log_level_set("esp_netif_handlers", ESP_LOG_VERBOSE);
-    esp_log_level_set("DNS_SERVER", ESP_LOG_WARN);
+    esp_log_level_set("PAGE_HOME", ESP_LOG_VERBOSE);
+    esp_log_level_set("PAGE_LED", ESP_LOG_VERBOSE);
 //    esp_log_level_set("LVGL", ESP_LOG_VERBOSE);
 //    esp_log_level_set("lcd_panel.st7789", ESP_LOG_VERBOSE);
 //    esp_log_level_set("lcd_panel.io.spi", ESP_LOG_VERBOSE);
