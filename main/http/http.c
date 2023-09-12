@@ -167,27 +167,27 @@ esp_err_t http_get_weather(weather_result_t *result)
         goto exception;
     }
 
-    if (json_obj_get_string(jctx, "cityname", &result->city, 10) != OS_SUCCESS) {
+    if (json_obj_get_string(jctx, "cityname", result->city, 10) != OS_SUCCESS) {
         ESP_LOGE(TAG, "json_obj_get_int failed: weather\n");
         goto exception;
     }
-    if (json_obj_get_string(jctx, "temp", &result->temp, 5) != OS_SUCCESS) {
+    if (json_obj_get_string(jctx, "temp", result->temp, 5) != OS_SUCCESS) {
         ESP_LOGE(TAG, "json_obj_get_int failed: weather\n");
         goto exception;
     }
-    if (json_obj_get_string(jctx, "SD", &result->humi, 5) != OS_SUCCESS) {
+    if (json_obj_get_string(jctx, "SD", result->humi, 5) != OS_SUCCESS) {
         ESP_LOGE(TAG, "json_obj_get_int failed: humi\n");
         goto exception;
     }
-    if (json_obj_get_string(jctx, "weather", &result->weather, 12) != OS_SUCCESS) {
+    if (json_obj_get_string(jctx, "weather", result->weather, 12) != OS_SUCCESS) {
         ESP_LOGE(TAG, "json_obj_get_int failed: weather\n");
         goto exception;
     }
-    if (json_obj_get_string(jctx, "WD", &result->wind, 12) != OS_SUCCESS) {
+    if (json_obj_get_string(jctx, "WD", result->wind, 12) != OS_SUCCESS) {
         ESP_LOGE(TAG, "json_obj_get_int failed: wind\n");
         goto exception;
     }
-    if (json_obj_get_string(jctx, "WS", &result->windSpeed, 10) != OS_SUCCESS) {
+    if (json_obj_get_string(jctx, "WS", result->windSpeed, 10) != OS_SUCCESS) {
         ESP_LOGE(TAG, "json_obj_get_int failed: windSpeed\n");
         goto exception;
     }

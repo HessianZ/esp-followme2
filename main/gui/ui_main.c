@@ -5,19 +5,13 @@
  */
 
 #include <sys/time.h>
-#include <driver/ledc.h>
-#include <esp_sntp.h>
 #include <esp_wifi.h>
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_check.h"
 #include "lv_symbol_extra_def.h"
 #include "app_wifi.h"
 #include "ui_main.h"
-//#include "ui_about_us.h"
-#include "ui_net_config.h"
 #include "esp_lvgl_port.h"
 #include "bsp/tft-feather.h"
 #include "page/page_home.h"
@@ -51,7 +45,6 @@ static lv_obj_t *lab_weather = NULL;
 static lv_obj_t *g_lab_wifi = NULL;
 
 static void ui_main_menu(int32_t index_id);
-static void ui_led_set_visible(bool visible);
 
 void ui_acquire(void)
 {
@@ -144,17 +137,13 @@ void ui_main_status_bar_set_wifi(bool is_connected)
     }
 }
 
-LV_IMG_DECLARE(icon_about_us)
-LV_IMG_DECLARE(icon_network)
-LV_IMG_DECLARE(icon_book)
 
-
-static enum page_index_t {
+enum {
     PAGE_HOME,
     PAGE_LED,
 //    PAGE_ABOUT_US_INDEX,
     PAGE_COUNT
-};
+} page_index_t;
 
 typedef struct {
     void (*render)(lv_obj_t *);
@@ -416,22 +405,4 @@ esp_err_t ui_main_start(void)
 
     ui_release();
     return ESP_OK;
-}
-
-/* **************** MISC FUNCTION **************** */
-static void ui_led_set_visible(bool visible)
-{
-    for (size_t i = 0; i < sizeof(g_led_item) / sizeof(g_led_item[0]); i++) {
-        if (NULL != g_led_item[i]) {
-            if (visible) {
-                lv_obj_clear_flag(g_led_item[i], LV_OBJ_FLAG_HIDDEN);
-            } else {
-                lv_obj_add_flag(g_led_item[i], LV_OBJ_FLAG_HIDDEN);
-            }
-        }
-    }
-}
-
-void ui_btn_rm_all_cb(void)
-{
 }
