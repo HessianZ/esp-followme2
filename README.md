@@ -1,56 +1,53 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C6 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- |
+# ESP-FollowMe2
+## 活动介绍
+"Follow me活动”是DigiKey联合EEWORLD发起的为期一年的“跟技术大咖学技术，完成任务返现”活动。2023年共有4期，每3个月技术大咖推荐可玩性与可学性较强的开发板/仪器套件，带着大家实际操作。
 
-# Wi-Fi SoftAP Example
+* [活动首页](https://www.eeworld.com.cn/huodong/digikey_follow_me/)
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+## Adafruit ESP32-S3 TFT Feather简介
+![image](https://github.com/adafruit/Adafruit-ESP32-S3-TFT-Feather-PCB/raw/main/assets/5483.jpg?raw=true)
+Adafruit ESP32-S3 TFT Feather是由开源硬件行业知名公司Adafruit出品的一款富有特色的开源硬件，开发板使用乐鑫ESP32-S3芯片，支持WiFi和蓝牙能，自带高清TFT彩色显示屏。
+* [Adafruit ESP32-S3 TFT Feather 产品信息](https://www.adafruit.com/product/5483)
+* [Adafruit ESP32-S3 TFT Feather 使用指南](https://learn.adafruit.com/adafruit-esp32-s3-tft-feather)
 
-This example shows how to use the Wi-Fi SoftAP functionality of the Wi-Fi driver of ESP for serving as an Access Point.
 
-## How to use example
 
-SoftAP supports Protected Management Frames(PMF). Necessary configurations can be set using pmf flags. Please refer [Wifi-Security](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/wifi-security.html) for more info.
+## 第2期活动任务要求
 
-### Configure the project
+#### 任务1：控制屏幕显示中文（必做任务）
 
-Open the project configuration menu (`idf.py menuconfig`).
+> 完成屏幕的控制，并且能显示中文
 
-In the `Example Configuration` menu:
+#### 任务2：网络功能使用（必做任务）
 
-* Set the Wi-Fi configuration.
-    * Set `WiFi SSID`.
-    * Set `WiFi Password`.
+> 完成网络功能的使用，能够创建热点和连接到WiFi
 
-Optional: If you need, change the other options according to your requirements.
+#### 任务3：控制WS2812B（必做任务）
 
-### Build and Flash
+> 使用按键控制板载Neopixel LED的显示和颜色切换
 
-Build the project and flash it to the board, then run the monitor tool to view the serial output:
+#### 任务4：从下方5个分任务中选择1个感兴趣的完成即可（必做任务）
 
-Run `idf.py -p PORT flash monitor` to build, flash and monitor the project.
+> 分任务1：日历&时钟——完成一个可通过互联网更新的万年历时钟，并显示当地的天气信息
+> 
+> 分任务2：WS2812B效果控制——完成一个Neopixel(12灯珠或以上)控制器，通过按键和屏幕切换展示效果
+> 
+> 分任务3：数据检测与记录——按一定时间间隔连续记录温度/亮度信息，保存到SD卡，并可以通过按键调用查看之前的信息，并在屏幕上绘图
+> 
+> 分任务4：音乐播放功能——实现音乐播放器功能，可以在屏幕上显示列表信息和音乐信息，使用按键进行切换，使用扬声器进行播放
+> 
+> 分任务5：AI功能应用——结合运动传感器，完成手势识别功能，至少要识别三种手势(如水平左右、前后、垂直上下、水平画圈、垂直画圈，或者更复杂手势
 
-(To exit the serial monitor, type ``Ctrl-]``.)
 
-See the Getting Started Guide for all the steps to configure and use the ESP-IDF to build projects.
+#### 任务5：通过网络控制WS2812B（可选任务，非必做）
+> 结合123，在手机上通过网络控制板载Neopixel LED的显示和颜色切换，屏幕同步显示状态
 
-* [ESP-IDF Getting Started Guide on ESP32](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html)
-* [ESP-IDF Getting Started Guide on ESP32-S2](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s2/get-started/index.html)
-* [ESP-IDF Getting Started Guide on ESP32-C3](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c3/get-started/index.html)
 
-## Example Output
+## 项目介绍
+![image](https://github.com/HessianZ/esp-followme2/blob/master/assets/home1.jpg?raw=true)
 
-There is the console output for this example:
+该项目是基于Adafruit ESP32-S3 TFT Feather开发板的一个简单的示例，通过该示例可以学习到如何使用Adafruit ESP32-S3 TFT Feather开发板的WiFi、GPIO控制及以Neopixel LED控制等功能。
 
-```
-I (917) phy: phy_version: 3960, 5211945, Jul 18 2018, 10:40:07, 0, 0
-I (917) wifi: mode : softAP (30:ae:a4:80:45:69)
-I (917) wifi softAP: wifi_init_softap finished.SSID:myssid password:mypassword
-I (26457) wifi: n:1 0, o:1 0, ap:1 1, sta:255 255, prof:1
-I (26457) wifi: station: 70:ef:00:43:96:67 join, AID=1, bg, 20
-I (26467) wifi softAP: station:70:ef:00:43:96:67 join, AID=1
-I (27657) esp_netif_lwip: DHCP server assigned IP to a station, IP is: 192.168.4.2
-```
+该项目参考ESP-Box-Lite的实现，完成了"Follow me活动”第2期的任务1、2、3以及任务4的分任务1。
 
-## Troubleshooting
-
-For any technical queries, please open an [issue](https://github.com/espressif/esp-idf/issues) on GitHub. We will get back to you soon.
+该项目使用JetBrains CLion基于ESP-IDF进行开发。
