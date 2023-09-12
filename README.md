@@ -6,8 +6,14 @@
 
 该项目参考ESP-Box-Lite的实现，完成了"Follow me活动”第2期的任务1、2、3以及任务4的分任务1。
 
-该项目使用JetBrains CLion基于ESP-IDF进行开发。
+在尚未进行配网时启动板卡会自动启动AP热点，通过手机连接该热点会启动CaptivePortal网页引导进行配网，配网成功后会自动关闭AP热点。
+* SSID: https://hessian.cn/followme2
+* 密码: followme2
+> 连接信息可通过menuconfig进行修改
 
+配网完成后首页会显示已连接的WiFi信息以及IP地址，点击屏幕左侧的Boot0按钮会进入LED控制页面并点亮Neopixel LED呼吸灯，在该页面长按Boot0可控制板载的Neopixel LED的颜色切换，颜色可在红绿蓝三种颜色之间进行切换。
+
+> 该项目使用JetBrains CLion基于ESP-IDF进行开发。
 
 ## Follow me活动介绍
 "Follow me活动”是DigiKey联合EEWORLD发起的为期一年的“跟技术大咖学技术，完成任务返现”活动。2023年共有4期，每3个月技术大咖推荐可玩性与可学性较强的开发板/仪器套件，带着大家实际操作。
