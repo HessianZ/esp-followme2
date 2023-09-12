@@ -1,5 +1,15 @@
 # ESP-FollowMe2
-## 活动介绍
+## 项目介绍
+![image](https://github.com/HessianZ/esp-followme2/blob/master/assets/home1.jpg?raw=true)
+
+该项目是基于Adafruit ESP32-S3 TFT Feather开发板的一个简单的示例，通过该示例可以学习到如何使用Adafruit ESP32-S3 TFT Feather开发板的WiFi、GPIO控制及以Neopixel LED控制等功能。
+
+该项目参考ESP-Box-Lite的实现，完成了"Follow me活动”第2期的任务1、2、3以及任务4的分任务1。
+
+该项目使用JetBrains CLion基于ESP-IDF进行开发。
+
+
+## Follow me活动介绍
 "Follow me活动”是DigiKey联合EEWORLD发起的为期一年的“跟技术大咖学技术，完成任务返现”活动。2023年共有4期，每3个月技术大咖推荐可玩性与可学性较强的开发板/仪器套件，带着大家实际操作。
 
 * [活动首页](https://www.eeworld.com.cn/huodong/digikey_follow_me/)
@@ -41,13 +51,3 @@ Adafruit ESP32-S3 TFT Feather是由开源硬件行业知名公司Adafruit出品�
 
 #### 任务5：通过网络控制WS2812B（可选任务，非必做）
 > 结合123，在手机上通过网络控制板载Neopixel LED的显示和颜色切换，屏幕同步显示状态
-
-
-## 项目介绍
-![image](https://github.com/HessianZ/esp-followme2/blob/master/assets/home1.jpg?raw=true)
-
-该项目是基于Adafruit ESP32-S3 TFT Feather开发板的一个简单的示例，通过该示例可以学习到如何使用Adafruit ESP32-S3 TFT Feather开发板的WiFi、GPIO控制及以Neopixel LED控制等功能。
-
-该项目参考ESP-Box-Lite的实现，完成了"Follow me活动”第2期的任务1、2、3以及任务4的分任务1。
-
-该项目使用JetBrains CLion基于ESP-IDF进行开发。
