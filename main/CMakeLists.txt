@@ -4,7 +4,6 @@ idf_component_register(
         "app"
         "gui"
         "gui/font"
-        "gui/image"
         "gui/page"
         "http"
 
